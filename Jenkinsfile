@@ -8,7 +8,14 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/VishnuVardhan-dommeti/mini-k8s-demo.git'
+                script {
+                    retry(3) {
+                        checkout([$class: 'GitSCM', 
+                            branches: [[name: '*/main']], 
+                            userRemoteConfigs: [[url: 'https://github.com/VishnuVardhan-dommeti/mini-k8s-demo.git']]
+                        ])
+                    }
+                }
             }
         }
 
@@ -20,8 +27,10 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials', url: '']) {
-                    sh 'docker push $DOCKER_IMAGE'
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials') {
+                        sh 'docker push $DOCKER_IMAGE'
+                    }
                 }
             }
         }
