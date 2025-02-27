@@ -35,28 +35,30 @@ pipeline {
             }
         }
 
-        stage('Configure Minikube') {
-            steps {
-                script {
-                    sh '''
-                    echo "Setting up Minikube for Jenkins..."
+     stage('Configure Minikube') {
+    steps {
+        script {
+            sh '''
+            echo "Setting up Minikube for Jenkins..."
 
-                    # Ensure Minikube is running, or start it
-                    minikube status || minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g
-                    
-                    # Set Minikube context for Jenkins
-                    mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                    sudo ln -sf $HOME/.kube/config /var/lib/jenkins/.kube/config
-                    sudo ln -sf $HOME/.minikube /var/lib/jenkins/.minikube
-                    sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                    export KUBECONFIG=/var/lib/jenkins/.kube/config
-                    kubectl config use-context minikube
+            # Ensure Minikube is running, or start it
+            minikube status || minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g
+            
+            # Fix permissions and configure Minikube for Jenkins
+            mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
+            ln -sf $HOME/.kube/config /var/lib/jenkins/.kube/config
+            ln -sf $HOME/.minikube /var/lib/jenkins/.minikube
+            chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
 
-                    echo "Minikube setup complete!"
-                    '''
-                }
-            }
+            export KUBECONFIG=/var/lib/jenkins/.kube/config
+            kubectl config use-context minikube
+
+            echo "Minikube setup complete!"
+            '''
         }
+    }
+}
+
 
         stage('Deploy to Minikube') {
             steps {
