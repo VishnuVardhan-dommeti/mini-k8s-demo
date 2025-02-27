@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
       - name: flask-app
-        image: mini-k8s-demo:latest
-        imagePullPolicy: Never
+        image: vishnuvardhandommeti/mini-k8s-demo:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 5000
         envFrom:
