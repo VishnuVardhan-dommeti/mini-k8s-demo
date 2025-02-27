@@ -3,6 +3,8 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "vishnuvardhandommeti/mini-k8s-demo:latest"
+        MINIKUBE_HOME = "/var/lib/jenkins/.minikube"
+        KUBECONFIG = "/var/lib/jenkins/.kube/config"
     }
 
     stages {
@@ -35,41 +37,50 @@ pipeline {
             }
         }
 
-     stage('Configure Minikube') {
-    steps {
-        script {
-            sh '''
-            echo "Setting up Minikube for Jenkins..."
+        stage('Configure Minikube') {
+            steps {
+                script {
+                    sh '''
+                        echo "Setting up Minikube for Jenkins..."
+                        
+                        # Ensure Jenkins has access to Minikube directories
+                        sudo mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
+                        
+                        # Only create symlink if it does not already exist
+                        if [ ! -f /var/lib/jenkins/.kube/config ]; then
+                            sudo ln -sf /home/mthree/.kube/config /var/lib/jenkins/.kube/config
+                        fi
 
-            # Ensure Minikube is running, or start it
-            minikube status || minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g
-            
-            # Fix permissions and configure Minikube for Jenkins
-            mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-            ln -sf $HOME/.kube/config /var/lib/jenkins/.kube/config
-            ln -sf $HOME/.minikube /var/lib/jenkins/.minikube
-            chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-
-            export KUBECONFIG=/var/lib/jenkins/.kube/config
-            kubectl config use-context minikube
-
-            echo "Minikube setup complete!"
-            '''
+                        if [ ! -L /var/lib/jenkins/.minikube ]; then
+                            sudo ln -sf /home/mthree/.minikube /var/lib/jenkins/.minikube
+                        fi
+                        
+                        # Fix permissions for Jenkins
+                        sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
+                        sudo chmod -R u+wrx /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
+                        
+                        # Start Minikube inside Jenkins (force root mode)
+                        export MINIKUBE_HOME=/var/lib/jenkins/.minikube
+                        sudo minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --force
+                        sudo minikube update-context
+                    '''
+                }
+            }
         }
-    }
-}
-
 
         stage('Deploy to Minikube') {
             steps {
-                sh '''
-                kubectl apply -f k8s/namespace.yaml
-                kubectl apply -f k8s/configmap.yaml
-                kubectl apply -f k8s/deployment.yaml
-                kubectl apply -f k8s/service.yaml
-                kubectl -n mini-demo rollout status deployment/flask-app
-                minikube service flask-app -n mini-demo --url
-                '''
+                script {
+                    sh '''
+                        export KUBECONFIG=/var/lib/jenkins/.kube/config
+                        kubectl apply -f k8s/namespace.yaml
+                        kubectl apply -f k8s/configmap.yaml
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/service.yaml
+                        kubectl -n mini-demo rollout status deployment/flask-app
+                        minikube service flask-app -n mini-demo --url
+                    '''
+                }
             }
         }
     }
