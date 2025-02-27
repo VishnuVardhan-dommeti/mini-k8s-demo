@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "vishnuvardhandommeti/mini-k8s-demo:latest"
-        MINIKUBE_HOME = "/var/lib/jenkins/.minikube"
-        KUBECONFIG = "/var/lib/jenkins/.kube/config"
+        MINIKUBE_HOME = "/home/jenkins/.minikube"
+        KUBECONFIG = "/home/jenkins/.kube/config"
     }
 
     stages {
@@ -41,26 +41,28 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        echo "Setting up Minikube for Jenkins..."
+                        echo "🔹 Setting up Minikube for Jenkins..."
 
-                        # Fix file permissions for Minikube & Kube config
-                        sudo mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                        sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                        sudo chmod -R 777 /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
+                        # Ensure correct permissions for .kube and .minikube
+                        sudo mkdir -p /home/jenkins/.kube /home/jenkins/.minikube
+                        sudo chown -R jenkins:jenkins /home/jenkins/.kube /home/jenkins/.minikube
+                        sudo chmod -R 755 /home/jenkins/.kube /home/jenkins/.minikube
 
-                        # Set Minikube environment variables
-                        export MINIKUBE_HOME=/var/lib/jenkins/.minikube
-                        export KUBECONFIG=/var/lib/jenkins/.kube/config
-                        sudo chmod 600 $KUBECONFIG
+                        # Ensure KUBECONFIG is writable
+                        sudo touch /home/jenkins/.kube/config
+                        sudo chown jenkins:jenkins /home/jenkins/.kube/config
+                        sudo chmod 600 /home/jenkins/.kube/config
 
-                        # Delete old Minikube instance if present
-                        sudo minikube delete || true
+                        # Delete old Minikube instance if present (run as Jenkins user)
+                        minikube delete || true
 
-                        # Start Minikube with proper settings
-                        sudo sysctl fs.protected_regular=0
-                        minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --force --wait=all
+                        # Start Minikube as Jenkins (NO SUDO)
+                        export MINIKUBE_HOME=/home/jenkins/.minikube
+                        export KUBECONFIG=/home/jenkins/.kube/config
+                        
+                        minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --wait=all
 
-                        # Update kubectl context
+                        # Ensure kubectl uses the correct Minikube config
                         minikube update-context
                     '''
                 }
@@ -71,11 +73,8 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        echo "Deploying to Minikube..."
-                        export KUBECONFIG=/var/lib/jenkins/.kube/config
-                        
-                        # Ensure correct permissions for kubeconfig
-                        sudo chmod 600 /var/lib/jenkins/.kube/config
+                        echo "🚀 Deploying to Minikube..."
+                        export KUBECONFIG=/home/jenkins/.kube/config
 
                         # Apply Kubernetes manifests
                         kubectl apply -f k8s/namespace.yaml
