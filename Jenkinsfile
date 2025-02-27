@@ -43,36 +43,25 @@ pipeline {
                     sh '''
                         echo "Setting up Minikube for Jenkins..."
 
-                        # Fix file lock issue
-                        sudo sysctl fs.protected_regular=0
-
-                        # Ensure Jenkins has access to Minikube directories
+                        # Fix file permissions for Minikube & Kube config
                         sudo mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-
-                        # Fix symlink issues
-                        if [ ! -f /var/lib/jenkins/.kube/config ]; then
-                            sudo ln -sf /home/mthree/.kube/config /var/lib/jenkins/.kube/config
-                        fi
-
-                        if [ ! -L /var/lib/jenkins/.minikube ]; then
-                            sudo ln -sf /home/mthree/.minikube /var/lib/jenkins/.minikube
-                        fi
-
-                        # Fix permissions for Jenkins
                         sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                        sudo chmod -R u+wrx /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
+                        sudo chmod -R 777 /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
 
-                        # Explicitly set KUBECONFIG
+                        # Set Minikube environment variables
+                        export MINIKUBE_HOME=/var/lib/jenkins/.minikube
                         export KUBECONFIG=/var/lib/jenkins/.kube/config
                         sudo chmod 600 $KUBECONFIG
 
-                        # Clean existing Minikube and restart
+                        # Delete old Minikube instance if present
                         sudo minikube delete || true
 
-                        # Start Minikube inside Jenkins with force and waiting for API server
-                        export MINIKUBE_HOME=/var/lib/jenkins/.minikube
-                        sudo minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --force --wait=all
-                        sudo minikube update-context
+                        # Start Minikube with proper settings
+                        sudo sysctl fs.protected_regular=0
+                        minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --force --wait=all
+
+                        # Update kubectl context
+                        minikube update-context
                     '''
                 }
             }
@@ -82,12 +71,22 @@ pipeline {
             steps {
                 script {
                     sh '''
+                        echo "Deploying to Minikube..."
                         export KUBECONFIG=/var/lib/jenkins/.kube/config
+                        
+                        # Ensure correct permissions for kubeconfig
+                        sudo chmod 600 /var/lib/jenkins/.kube/config
+
+                        # Apply Kubernetes manifests
                         kubectl apply -f k8s/namespace.yaml
                         kubectl apply -f k8s/configmap.yaml
                         kubectl apply -f k8s/deployment.yaml
                         kubectl apply -f k8s/service.yaml
+
+                        # Wait for deployment rollout
                         kubectl -n mini-demo rollout status deployment/flask-app
+
+                        # Get Minikube service URL
                         minikube service flask-app -n mini-demo --url
                     '''
                 }
