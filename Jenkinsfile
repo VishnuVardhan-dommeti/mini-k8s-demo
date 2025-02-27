@@ -42,11 +42,14 @@ pipeline {
                 script {
                     sh '''
                         echo "Setting up Minikube for Jenkins..."
-                        
+
+                        # Fix file lock issue
+                        sudo sysctl fs.protected_regular=0
+
                         # Ensure Jenkins has access to Minikube directories
                         sudo mkdir -p /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                        
-                        # Only create symlink if it does not already exist
+
+                        # Fix symlink issues
                         if [ ! -f /var/lib/jenkins/.kube/config ]; then
                             sudo ln -sf /home/mthree/.kube/config /var/lib/jenkins/.kube/config
                         fi
@@ -54,14 +57,21 @@ pipeline {
                         if [ ! -L /var/lib/jenkins/.minikube ]; then
                             sudo ln -sf /home/mthree/.minikube /var/lib/jenkins/.minikube
                         fi
-                        
+
                         # Fix permissions for Jenkins
                         sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
                         sudo chmod -R u+wrx /var/lib/jenkins/.kube /var/lib/jenkins/.minikube
-                        
-                        # Start Minikube inside Jenkins (force root mode)
+
+                        # Explicitly set KUBECONFIG
+                        export KUBECONFIG=/var/lib/jenkins/.kube/config
+                        sudo chmod 600 $KUBECONFIG
+
+                        # Clean existing Minikube and restart
+                        sudo minikube delete || true
+
+                        # Start Minikube inside Jenkins with force and waiting for API server
                         export MINIKUBE_HOME=/var/lib/jenkins/.minikube
-                        sudo minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --force
+                        sudo minikube start --driver=docker --cpus=2 --memory=4096 --disk-size=10g --force --wait=all
                         sudo minikube update-context
                     '''
                 }
